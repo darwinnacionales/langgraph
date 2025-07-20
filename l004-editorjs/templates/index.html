@@ -1,185 +1,272 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8" />
-  <title>Streaming Chat & Simple Report</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      display: flex;
-      height: 100vh;
-    }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue 3 Streaming Chat & Report</title>
+    <style>
+        /* General Styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f7f9;
+            color: #2c3e50;
+        }
 
-    #left,
-    #right {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      box-sizing: border-box;
-    }
+        #app {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+        }
 
-    #left {
-      border-right: 2px solid #ddd;
-    }
+        /* Layout Panes */
+        .pane {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
 
-    .section {
-      margin-bottom: 20px;
-    }
+        .left-pane {
+            border-right: 1px solid #e0e6ed;
+            background-color: #ffffff;
+        }
+        
+        .right-pane {
+            background-color: #f4f7f9;
+        }
 
-    .message.assistant {
-      color: blue;
-    }
+        /* Section Styling */
+        .section {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .section h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.25rem;
+            color: #34495e;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
 
-    .message.final {
-      color: green;
-    }
+        /* Chat Styling */
+        .chat-window {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 1rem;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+        .message.user {
+            background-color: #3498db;
+            color: white;
+            border-bottom-left-radius: 0;
+            align-self: flex-start;
+        }
+        .message.assistant {
+            background-color: #e0e6ed;
+            color: #2c3e50;
+            border-bottom-right-radius: 0;
+            align-self: flex-end;
+        }
+        .message.final {
+            background-color: #2ecc71;
+            color: white;
+        }
 
-    .thought {
-      font-style: italic;
-      color: #555;
-    }
+        /* Input Form */
+        #input-form {
+            margin-top: 1rem;
+        }
+        #user-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
 
-    #report-holder {
-      background: #fafafa;
-      border: 1px solid #ccc;
-      padding: 10px;
-      min-height: 200px;
-    }
-  </style>
+        /* Thoughts Styling */
+        .thoughts-window {
+            max-height: 300px;
+            overflow-y: auto;
+            font-style: italic;
+            color: #555;
+            background-color: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .thought {
+            padding: 0.5rem;
+            border-bottom: 1px dashed #ddd;
+        }
+        .thought:last-child {
+            border-bottom: none;
+        }
+
+        /* Editor.js Styling */
+        #report-holder {
+            flex-grow: 1;
+        }
+        .codex-editor__redactor {
+            padding-bottom: 100px !important;
+        }
+
+    </style>
 </head>
-
 <body>
+    {% raw %}
+    <div id="app">
+        <!-- Left Pane for Chat -->
+        <div class="pane left-pane">
+            <div class="section" style="flex-grow: 1;">
+                <h2><span>💬</span> Chat</h2>
+                <div class="chat-window">
+                    <div v-for="(msg, index) in chatMessages" :key="index" :class="['message', msg.role]">
+                        <strong>{{ msg.role === 'user' ? 'You' : 'Assistant' }}:</strong>
+                        <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
+                    </div>
+                </div>
+                <form @submit.prevent="submitMessage" id="input-form">
+                    <input v-model="userInput" id="user-input" autocomplete="off" placeholder="Type your request…" />
+                </form>
+            </div>
+        </div>
 
-  <div id="left">
-    <div class="section" id="chat">
-      <h2>Chat</h2>
-      <div id="chat-messages"></div>
-      <form id="input-form"><input id="user-input" autocomplete="off" placeholder="Type your request…"
-          style="width:100%;" /></form>
+        <!-- Right Pane for Thoughts and Report -->
+        <div class="pane right-pane">
+            <div class="section">
+                <h2><span>🧠</span> Thoughts</h2>
+                <div class="thoughts-window">
+                    <div v-for="(thought, index) in thoughts" :key="index" class="thought">
+                        {{ thought }}
+                    </div>
+                </div>
+            </div>
+            <div class="section" style="flex-grow: 1;">
+                <h2><span>📄</span> Report</h2>
+                <div id="report-holder"></div>
+            </div>
+        </div>
     </div>
-  </div>
+    {% endraw %}
 
-  <div id="right">
-    <div class="section">
-      <h2>🧠 Thoughts</h2>
-      <div id="thoughts"></div>
-    </div>
-    <div class="section">
-      <h2>📄 Report</h2>
-      <div id="report-holder"></div>
-    </div>
-  </div>
+    <!-- Vue 3 from CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <!-- Editor.js and Plugins from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
+     <script type="module">
+    const { createApp, ref, onMounted, nextTick } = Vue;
 
-  <script>
-    window.addEventListener('load', () => {
-      const editor = new EditorJS({
-        holder: 'report-holder',
-        readOnly: true,
-        data: { blocks: [] }
-      });
+    createApp({
+      setup() {
+        const userInput = ref('');
+        const chatMessages = ref([]);
+        const thoughts = ref([]);
+        const editor = ref(null);
 
-      editor.isReady
-        .then(() => console.log('✅ Editor.js is ready!'))
-        .catch(err => console.error('❌ Editor.js initialization failed:', err));
-
-      const chatDiv = document.getElementById('chat-messages');
-      const thoughtsDiv = document.getElementById('thoughts');
-      const reportHolder = document.getElementById('report-holder');
-      const inputForm = document.getElementById('input-form');
-      const inputField = document.getElementById('user-input');
-
-      inputForm.addEventListener('submit', async e => {
-        e.preventDefault();
-        const text = inputField.value.trim();
-        if (!text) return;
-        appendChat('You', text);
-        inputField.value = '';
-        thoughtsDiv.innerHTML = '';
-        try {
-          await editor.isReady;
-          editor.blocks.clear();
-        } catch (error) {
-          console.error("Failed to clear Editor.js, but proceeding with chat:", error);
-        }
-        streamChat(text);
-      });
-
-      async function streamChat(text) {
-        const resp = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ input: text, user_id: 0 })
+        onMounted(() => {
+          editor.value = new EditorJS({
+            holder: 'report-holder',
+            readOnly: true,
+            tools: {
+              paragraph: { class: Paragraph, inlineToolbar: true },
+              header: { class: Header },
+              list: { class: List },
+            },
+            data: { blocks: [] }
+          });
         });
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop();
-          for (const chunk of parts) {
-            const lines = chunk.split('\n');
-            let evt = '', data = '';
-            for (const l of lines) {
-              if (l.startsWith('event:')) evt = l.slice(6).trim();
-              else if (l.startsWith('data:')) data += l.slice(5); // Don't add extra newlines
+
+        const submitMessage = async () => {
+          if (!userInput.value.trim()) return;
+          chatMessages.value.push({ role: 'user', content: userInput.value });
+          thoughts.value = [];
+          await editor.value.isReady;
+          editor.value.clear();
+          streamChat(userInput.value);
+          userInput.value = '';
+        };
+
+        const streamChat = async (text) => {
+          const response = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify({ input: text, user_id: 0 })
+          });
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+
+            for (const part of parts) {
+              const lines = part.split('\n');
+              let ev = '', data = '';
+              for (const l of lines) {
+                if (l.startsWith('event:')) ev = l.slice(6).trim();
+                else if (l.startsWith('data:')) data += l.slice(5);
+              }
+
+              if (ev === 'initial') {
+                chatMessages.value.push({ role: 'assistant', content: data });
+              } else if (ev === 'thought') {
+                thoughts.value.push(data);
+              } else if (ev === 'report_block') {
+                try {
+                  const block = JSON.parse(data);
+                  await editor.value.isReady;
+                  const idx = await editor.value.blocks.getBlocksCount();
+                  editor.value.blocks.insert(
+                    block.type,
+                    block.data,
+                    undefined,
+                    idx,
+                    false
+                  );
+                } catch (e) {
+                  console.error('Invalid block data', e);
+                }
+              } else if (ev === 'final') {
+                chatMessages.value.push({ role: 'assistant final', content: data });
+              }
+
+              nextTick(() => {
+                const cw = document.querySelector('.chat-window');
+                if (cw) cw.scrollTop = cw.scrollHeight;
+              });
             }
-            handleEvent(evt, data);
           }
-        }
-      }
+        };
 
-      function handleEvent(event, data) {
-        if (event === 'initial') {
-          appendChat('assistant', data);
-        } else if (event === 'thought') {
-          appendThought(data);
-        } else if (event === 'report') {
-          // The data for a 'report' event is now a JSON string
-          try {
-            const reportData = JSON.parse(data);
-            appendReport(reportData);
-          } catch (e) {
-            console.error("Failed to parse report JSON:", e, data);
-          }
-        } else if (event === 'final') {
-          appendChat('assistant', data, 'final');
-        }
+        return { userInput, chatMessages, thoughts, submitMessage };
       }
-
-      function appendChat(who, text, css = '') {
-        const d = document.createElement('div');
-        d.className = 'message ' + css;
-        d.textContent = `${who}: ${text}`;
-        chatDiv.appendChild(d);
-        chatDiv.scrollTop = chatDiv.scrollHeight;
-      }
-
-      function appendThought(text) {
-        const d = document.createElement('div');
-        d.className = 'thought';
-        d.textContent = text;
-        thoughtsDiv.appendChild(d);
-        thoughtsDiv.scrollTop = thoughtsDiv.scrollHeight;
-      }
-
-      // This function now receives a full Editor.js data object
-      async function appendReport(reportData) {
-        if (reportData && reportData.blocks) {
-          await editor.isReady;
-          // Use the editor's render() method to display the full report
-          await editor.render(reportData);
-          reportHolder.scrollTop = reportHolder.scrollHeight;
-        }
-      }
-    });
+    }).mount('#app');
   </script>
 </body>
-
 </html>

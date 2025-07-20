@@ -1,8 +1,10 @@
+import json
+
 from flask import Flask, Response, request, stream_with_context
 from flask_cors import CORS
 from flask import render_template
 from dotenv import load_dotenv
-import os
+
 from .supervisor import workflow
 
 load_dotenv()
@@ -39,8 +41,22 @@ def chat_stream():
                 yield sse("thought", f"{node} ➜ {content}")
 
             elif node == "supervisor":
-                print(f"SSE → report chunk: {content!r}")
-                yield sse("report", content)
+                # The content is a full Editor.js JSON object
+                # We parse it, then stream each block individually
+                try:
+                    report_data = json.loads(content)
+                    blocks = report_data.get("blocks", [])
+                    print(f"SSE → Streaming {len(blocks)} report blocks.")
+                    for block in blocks:
+                        # Send each block as a 'report_block' event
+                        yield sse("report_block", json.dumps(block))
+                except json.JSONDecodeError:
+                    # Fallback for plain text or malformed JSON
+                    print(f"SSE → Could not parse report as JSON, sending as plain text.")
+                    yield sse("report_block", json.dumps({
+                        "type": "paragraph",
+                        "data": { "text": content }
+                    }))
 
         yield sse("final", "✅ Report complete.")
         print("SSE → final: ✅ Report complete.")

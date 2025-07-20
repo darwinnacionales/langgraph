@@ -39,25 +39,28 @@ supervisor = create_supervisor(
     {
     "time": 1234567890123,
     "blocks": [
-        { "type": "paragraph", "data": { "text": "Title here." } },
-        { "type": "paragraph", "data": { "text": "Content here." } },
-        { "type": "paragraph", "data": { "text": "Another content here." } },
+        { "type": "header", "data": { "text": "Report Title", "level": 2 } },
+        { "type": "paragraph", "data": { "text": "This is an introduction to the report." } },
+        { "type": "list", "data": { "style": "unordered", "items": ["First point.", "Second point.", "Third point."] } },
+        { "type": "paragraph", "data": { "text": "This is a concluding paragraph." } }
     ]
     }
 
     - **Do NOT** wrap the JSON in markdown.
     - Do not output any extra text — only **one valid JSON**.
     - Ensure the `time` is the current Unix time in milliseconds.
-    - Use only paragraphs as blocks.
+    - Use `header`, `paragraph`, and `list` blocks.
+      - For headers, `level` can be 1, 2, 3, etc.
+      - For lists, `style` can be "unordered" (for bullet points) or "ordered" (for numbers).
 
     Example:
     ```json
     {
     "time": 1752971214073,
     "blocks": [
-        { "type": "paragraph", "data": { "text": "Report Title" } },
-        { "type": "paragraph", "data": { "text": "This is the content of the report." } },
-        { "type": "paragraph", "data": { "text": "Additional information can go here." } }
+        { "type": "header", "data": { "text": "Q1 Sales Analysis", "level": 2 } },
+        { "type": "paragraph", "data": { "text": "The first quarter showed significant growth in key areas." } },
+        { "type": "list", "data": { "style": "unordered", "items": [ "Total revenue increased by 15%.", "Customer acquisition grew by 22%.", "Product C was the top seller." ] } }
     ]
     }
     ```
