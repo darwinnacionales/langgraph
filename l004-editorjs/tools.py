@@ -1,6 +1,37 @@
 from langchain_core.tools import tool
+from langgraph.config import get_stream_writer
 import random
 from typing import Dict, Any, List
+import json
+
+@tool
+def notify_thought_tool(thought: str, stage: str = "thought") -> str:
+    """
+    Used by the supervisor to share its thought process at different stages.
+
+    Args:
+        thought (str): The explanation of what the supervisor is thinking or planning.
+        stage (str): The stage of thought, e.g., 'initial', 'thought', or 'final'.
+
+    Returns:
+        A JSON string containing the event stage and the thought content.
+    """
+    print(f"[NOTIFY_THOUGHT] ({stage}) {thought}")
+    payload = {
+        "event": stage,
+        "content": thought
+    }
+
+    try:
+        writer = get_stream_writer()
+        if writer:
+            writer(payload)
+        else:
+            print("[WARN] No stream_writer found. Thought will not be streamed.")
+    except Exception as e:
+        print(f"[ERROR] Failed to stream thought: {e}")
+
+    return json.dumps(payload)
 
 @tool
 def gather_data_tool(request: str):
