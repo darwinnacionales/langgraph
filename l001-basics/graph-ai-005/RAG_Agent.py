@@ -22,7 +22,7 @@ embeddings = OpenAIEmbeddings(
 )
 
 
-pdf_path = "basics/graph-ai-005/Stock_Market_Performance_2024.pdf"
+pdf_path = "l001-basics/graph-ai-005/Stock_Market_Performance_2024.pdf"
 
 
 # Safety measure I have put for debugging purposes :)
@@ -48,7 +48,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 pages_split = text_splitter.split_documents(pages) # We now apply this to our pages
 
-persist_directory = r"basics/graph-ai-005/chroma_db" # This is the directory where we will store our vector database
+persist_directory = r"l001-basics/graph-ai-005/chroma_db" # This is the directory where we will store our vector database
 collection_name = "stock_market"
 
 # If our collection does not exist in the directory, we create using the os command
