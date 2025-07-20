@@ -52,34 +52,35 @@ def chat_stream():
             for event, data_tuple in stream:
                 print("-" * 80)
                 print(f"RAW EVENT: {repr(event)}")
-                print(f"RAW DATA: {repr(data_tuple)}")
+                # print(f"RAW DATA: {repr(data_tuple)}")
                 print("-" * 80)
-
+                
                 if event == "debug":
-                    # We only care about when the specific thought tool finishes running
-                    if (data.get("event") == "on_tool_end" and 
-                        data.get("name") == "notify_thought_tool"):
-                        try:
-                            # The tool's direct JSON output is in the 'data' payload
-                            tool_output_str = data.get("data", {}).get("output")
-                            if tool_output_str:
-                                tool_data = json.loads(tool_output_str)
-                                event_name = tool_data.get("event", "thought")
-                                text = tool_data.get("content", "")
+                    payload = data_tuple
+                    print("DEBUG_INSPECT type:", type(payload))
+                    if isinstance(payload, dict):
+                        print("DEBUG_INSPECT keys:", payload.keys())
 
-                                # Ensure we haven't sent this thought already
-                                if text and text not in sent_thoughts:
-                                    print(f"SSE (from DEBUG) → {event_name}: {text}")
-                                    yield sse(event_name, text)
-                                    sent_thoughts.add(text)
-                        except Exception as e:
-                            print(f"SSE → (error parsing DEBUG event): {e}")
-                    # After processing a debug event, we skip to the next item
+                    # Extract nested result
+                    result = payload.get("payload", {}).get("result", [])
+                    for key, val in result:
+                        if key != "messages":
+                            continue
+                        for msg in val:
+                            # msg is a HumanMessage, AIMessage or ToolMessage
+                            if getattr(msg, "type", None) == "tool" and getattr(msg, "name", None) == "notify_thought_tool":
+                                content = getattr(msg, "content", "{}")
+                                try:
+                                    tool_data = json.loads(content)
+                                    event_name = tool_data.get("event", "thought")
+                                    text = tool_data.get("content", "")
+                                    if text and text not in sent_thoughts:
+                                        yield sse(event_name, text)
+                                        sent_thoughts.add(text)
+                                except json.JSONDecodeError as e:
+                                    print("DEBUG parse error:", e)
                     continue
 
-                if event == "custom":
-                    print(f"SSE → custom event: {data_tuple}")
-                    continue
 
                 if event != "messages":
                     continue
