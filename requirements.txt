@@ -7,3 +7,4 @@ langchain-chroma
 pypdf
 langgraph-supervisor
 flask
+flask-cors
