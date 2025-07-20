@@ -33,6 +33,7 @@
         .left-pane {
             border-right: 1px solid #e0e6ed;
             background-color: #ffffff;
+            max-width: 500px; /* Constrain chat width */
         }
         
         .right-pane {
@@ -42,8 +43,8 @@
         /* Section Styling */
         .section {
             background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
             padding: 1.5rem;
             display: flex;
             flex-direction: column;
@@ -56,6 +57,8 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            border-bottom: 1px solid #e0e6ed;
+            padding-bottom: 1rem;
         }
 
         /* Chat Styling */
@@ -66,57 +69,87 @@
         }
         .message {
             margin-bottom: 1rem;
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
+            max-width: 90%;
+        }
+        .message-content {
+            padding: 0.75rem 1.25rem;
+            border-radius: 18px;
             line-height: 1.5;
+            display: inline-block;
         }
         .message.user {
-            background-color: #3498db;
+            align-self: flex-end;
+            text-align: right;
+        }
+        .message.user .message-content {
+            background-color: #007aff;
             color: white;
-            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
             align-self: flex-start;
         }
-        .message.assistant {
-            background-color: #e0e6ed;
+        .message.assistant .message-content {
+            background-color: #e5e5ea;
             color: #2c3e50;
-            border-bottom-right-radius: 0;
-            align-self: flex-end;
+            border-bottom-left-radius: 4px;
         }
-        .message.final {
-            background-color: #2ecc71;
+        
+        .message.final .message-content {
+            background-color: #34c759;
             color: white;
+            border-bottom-left-radius: 4px;
         }
+
+        /* Thinking Dropdown Styling */
+        .thinking-details {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .thinking-details summary {
+            cursor: pointer;
+            color: #6c757d;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            outline: none;
+        }
+        .thinking-details[open] summary {
+            margin-bottom: 0.5rem;
+        }
+        .thinking-content {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: #495057;
+        }
+        .thought {
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed #dee2e6;
+        }
+        .thought:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .thought:first-child {
+            padding-top: 0;
+        }
+
 
         /* Input Form */
         #input-form {
             margin-top: 1rem;
+            display: flex;
         }
         #user-input {
-            width: 100%;
+            flex-grow: 1;
             padding: 0.75rem;
             border: 1px solid #ccc;
             border-radius: 8px;
             box-sizing: border-box;
             font-size: 1rem;
-        }
-
-        /* Thoughts Styling */
-        .thoughts-window {
-            max-height: 300px;
-            overflow-y: auto;
-            font-style: italic;
-            color: #555;
-            background-color: #fafafa;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 1rem;
-        }
-        .thought {
-            padding: 0.5rem;
-            border-bottom: 1px dashed #ddd;
-        }
-        .thought:last-child {
-            border-bottom: none;
         }
 
         /* Editor.js Styling */
@@ -138,8 +171,19 @@
                 <h2><span>💬</span> Chat</h2>
                 <div class="chat-window">
                     <div v-for="(msg, index) in chatMessages" :key="index" :class="['message', msg.role]">
-                        <strong>{{ msg.role === 'user' ? 'You' : 'Assistant' }}:</strong>
-                        <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
+                        <div class="message-content">
+                            <strong>{{ msg.role === 'user' ? 'You' : 'Assistant' }}:</strong>
+                            <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
+                        </div>
+                        <!-- Integrated Thinking Dropdown -->
+                        <details v-if="msg.thoughts && msg.thoughts.length > 0" class="thinking-details">
+                            <summary>Show thinking</summary>
+                            <div class="thinking-content">
+                                <div v-for="(thought, tIndex) in msg.thoughts" :key="tIndex" class="thought">
+                                    {{ thought }}
+                                </div>
+                            </div>
+                        </details>
                     </div>
                 </div>
                 <form @submit.prevent="submitMessage" id="input-form">
@@ -148,16 +192,8 @@
             </div>
         </div>
 
-        <!-- Right Pane for Thoughts and Report -->
+        <!-- Right Pane for Report -->
         <div class="pane right-pane">
-            <div class="section">
-                <h2><span>🧠</span> Thoughts</h2>
-                <div class="thoughts-window">
-                    <div v-for="(thought, index) in thoughts" :key="index" class="thought">
-                        {{ thought }}
-                    </div>
-                </div>
-            </div>
             <div class="section" style="flex-grow: 1;">
                 <h2><span>📄</span> Report</h2>
                 <div id="report-holder"></div>
@@ -182,7 +218,6 @@
       setup() {
         const userInput = ref('');
         const chatMessages = ref([]);
-        const thoughts = ref([]);
         const editor = ref(null);
 
         onMounted(() => {
@@ -200,10 +235,14 @@
 
         const submitMessage = async () => {
           if (!userInput.value.trim()) return;
-          chatMessages.value.push({ role: 'user', content: userInput.value });
-          thoughts.value = [];
+          chatMessages.value.push({ role: 'user', content: userInput.value, thoughts: [] });
+          
+          // Add a placeholder for the assistant's response
+          chatMessages.value.push({ role: 'assistant', content: 'Thinking...', thoughts: [] });
+
           await editor.value.isReady;
           editor.value.clear();
+          
           streamChat(userInput.value);
           userInput.value = '';
         };
@@ -217,6 +256,7 @@
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
+          let firstAssistantMessage = false;
 
           while (true) {
             const { value, done } = await reader.read();
@@ -233,10 +273,16 @@
                 else if (l.startsWith('data:')) data += l.slice(5);
               }
 
+              const lastMessage = chatMessages.value[chatMessages.value.length - 1];
+
               if (ev === 'initial') {
-                chatMessages.value.push({ role: 'assistant', content: data });
+                if(lastMessage && lastMessage.role === 'assistant'){
+                    lastMessage.content = data;
+                }
               } else if (ev === 'thought') {
-                thoughts.value.push(data);
+                 if(lastMessage && lastMessage.role === 'assistant'){
+                    lastMessage.thoughts.push(data);
+                }
               } else if (ev === 'report_block') {
                 try {
                   const block = JSON.parse(data);
@@ -253,7 +299,8 @@
                   console.error('Invalid block data', e);
                 }
               } else if (ev === 'final') {
-                chatMessages.value.push({ role: 'assistant final', content: data });
+                // Add a new, final message
+                chatMessages.value.push({ role: 'assistant final', content: data, thoughts: [] });
               }
 
               nextTick(() => {
@@ -264,7 +311,7 @@
           }
         };
 
-        return { userInput, chatMessages, thoughts, submitMessage };
+        return { userInput, chatMessages, submitMessage };
       }
     }).mount('#app');
   </script>
