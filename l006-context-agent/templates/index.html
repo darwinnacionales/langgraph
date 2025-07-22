@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue 3 Streaming Chat & Report</title>
+    <style>
+        /* General Styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f7f9;
+            color: #2c3e50;
+        }
+
+        #app {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+        }
+
+        /* Layout Panes */
+        .pane {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .left-pane {
+            border-right: 1px solid #e0e6ed;
+            background-color: #ffffff;
+            max-width: 500px; /* Constrain chat width */
+        }
+        
+        .right-pane {
+            background-color: #f4f7f9;
+        }
+
+        /* Section Styling */
+        .section {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .section h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.25rem;
+            color: #34495e;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid #e0e6ed;
+            padding-bottom: 1rem;
+        }
+
+        /* Chat Styling */
+        .chat-window {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 1rem;
+        }
+        .message {
+            margin-bottom: 1rem;
+            max-width: 90%;
+        }
+        .message-content {
+            padding: 0.75rem 1.25rem;
+            border-radius: 18px;
+            line-height: 1.5;
+            display: inline-block;
+        }
+        .message.user {
+            align-self: flex-end;
+            text-align: left;
+        }
+        .message.user .message-content {
+            background-color: #007aff;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+        .message.assistant .message-content {
+            background-color: #e5e5ea;
+            color: #2c3e50;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message.final .message-content {
+            background-color: #34c759;
+            color: white;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Thinking Dropdown Styling */
+        .thinking-details {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .thinking-details summary {
+            cursor: pointer;
+            color: #6c757d;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            outline: none;
+        }
+        .thinking-details[open] summary {
+            margin-bottom: 0.5rem;
+        }
+        .thinking-content {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: #495057;
+        }
+        .thought {
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed #dee2e6;
+        }
+        .thought:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .thought:first-child {
+            padding-top: 0;
+        }
+
+
+        /* Input Form */
+        #input-form {
+            margin-top: 1rem;
+            display: flex;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+
+        /* Editor.js Styling */
+        #report-holder {
+            flex-grow: 1;
+        }
+        .codex-editor__redactor {
+            padding-bottom: 100px !important;
+        }
+
+    </style>
+</head>
+<body>
+    {% raw %}
+    <div id="app">
+        <!-- Left Pane for Chat -->
+        <div class="pane left-pane">
+            <div class="section" style="flex-grow: 1;">
+                <h2><span>💬</span> Chat</h2>
+                <div class="chat-window">
+                    <div v-for="(msg, index) in chatMessages" :key="index" :class="['message', msg.role]">
+                        <div class="message-content">
+                            <strong>{{ msg.role === 'user' ? 'You' : 'Assistant' }}:</strong>
+                            <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
+                        </div>
+                        <!-- Integrated Thinking Dropdown -->
+                        <details v-if="msg.thoughts && msg.thoughts.length > 0" class="thinking-details">
+                            <summary>Show thinking</summary>
+                            <div class="thinking-content">
+                                <div v-for="(thought, tIndex) in msg.thoughts" :key="tIndex" class="thought">
+                                    {{ thought }}
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+                <form @submit.prevent="submitMessage" id="input-form">
+                    <input v-model="userInput" id="user-input" autocomplete="off" placeholder="Type your request…" />
+                </form>
+            </div>
+        </div>
+
+        <!-- Right Pane for Report -->
+        <div class="pane right-pane">
+            <div class="section" style="flex-grow: 1;">
+                <h2><span>📄</span> Report</h2>
+                <div id="report-holder"></div>
+            </div>
+        </div>
+    </div>
+    {% endraw %}
+
+    <!-- Vue 3 from CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <!-- Editor.js and Plugins from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0"></script>
+
+     <script type="module">
+    const { createApp, ref, onMounted, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const userInput = ref('');
+        const chatMessages = ref([]);
+        const editor = ref(null);
+        const userId = ref(null);
+
+        onMounted(() => {
+          userId.value = Math.floor(Math.random() * 100000); // Simulate user ID
+
+          editor.value = new EditorJS({
+            holder: 'report-holder',
+            readOnly: true,
+            tools: {
+              paragraph: { class: Paragraph, inlineToolbar: true },
+              header: { class: Header },
+              list: { class: List },
+            },
+            data: { blocks: [] }
+          });
+        });
+
+        const submitMessage = async () => {
+          if (!userInput.value.trim()) return;
+          chatMessages.value.push({ role: 'user', content: userInput.value, thoughts: [] });
+          
+          // Add a placeholder for the assistant's response
+          chatMessages.value.push({ role: 'assistant', content: 'Thinking...', thoughts: [] });
+
+          await editor.value.isReady;
+          editor.value.clear();
+          
+          streamChat(userInput.value);
+          userInput.value = '';
+        };
+
+        const streamChat = async (text) => {
+          const response = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify({ input: text, user_id: userId.value })
+          });
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let firstAssistantMessage = false;
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+
+            for (const part of parts) {
+              const lines = part.split('\n');
+              let ev = '', data = '';
+              for (const l of lines) {
+                if (l.startsWith('event:')) ev = l.slice(6).trim();
+                else if (l.startsWith('data:')) data += l.slice(5);
+              }
+
+              const lastMessage = chatMessages.value[chatMessages.value.length - 1];
+
+              if (ev === 'initial') {
+                if(lastMessage && lastMessage.role === 'assistant'){
+                    lastMessage.content = data;
+                }
+              } else if (ev === 'thought') {
+                 if(lastMessage && lastMessage.role === 'assistant'){
+                    lastMessage.thoughts.push(data);
+                }
+              } else if (ev === 'report_block') {
+                try {
+                  const block = JSON.parse(data);
+                  await editor.value.isReady;
+                  const idx = await editor.value.blocks.getBlocksCount();
+                  editor.value.blocks.insert(
+                    block.type,
+                    block.data,
+                    undefined,
+                    idx,
+                    false
+                  );
+                } catch (e) {
+                  console.error('Invalid block data', e);
+                }
+              } else if (ev === 'final') {
+                // Add a new, final message
+                chatMessages.value.push({ role: 'assistant final', content: data, thoughts: [] });
+              }
+
+              nextTick(() => {
+                const cw = document.querySelector('.chat-window');
+                if (cw) cw.scrollTop = cw.scrollHeight;
+              });
+            }
+          }
+        };
+
+        return { userInput, chatMessages, submitMessage };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
