@@ -5,7 +5,7 @@ from flask import Flask, Response, request, stream_with_context, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from .supervisor import workflow
+from .workflow_graph import workflow_graph
 
 import sys
 import os
@@ -29,21 +29,26 @@ def chat_stream():
 
     if not user_id:
         return "Missing 'user_id'", 400
-    else:
-        print(f"Received user_id: {user_id}")
-
     if not user_input:
         return "Missing 'input'", 400
 
     def event_stream():
         try:
-            print("SSE → user input:", user_input)
+            # Send an initial event (logged but no UI impact)
+            yield sse("initial", "Session starting")
 
             sent_thoughts = set()
             report_started = False
 
-            stream = workflow.stream(
-                {"messages": [{"role": "user", "content": user_input}], "user_id": user_id},
+            # Kick off the graph stream; RedisSaver ensures previous messages are loaded
+            stream = workflow_graph.stream(
+                {
+                    "messages": [{"role": "user", "content": user_input}],
+                    "user_id": user_id,
+                    # "company": None,
+                    # "time_duration": None,
+                    # "report_type": None,
+                },
                 config={
                     "configurable": {
                         "thread_id": f"user-{user_id}",
@@ -51,118 +56,79 @@ def chat_stream():
                     },
                     "recursion_limit": 100,
                 },
-                stream_mode=["messages", "custom", "debug"],
+                stream_mode=["messages", "custom"],
             )
 
+            # Process each message event
             for event, data_tuple in stream:
-                print("-" * 80)
-                print(f"RAW EVENT: {repr(event)}")
-                # print(f"RAW DATA: {repr(data_tuple)}")
-                print("-" * 80)
-                
+                # print(f"[DEBUG] RAW EVENT → {event!r}")
                 if event == "debug":
-                    payload = data_tuple
-                    print("DEBUG_INSPECT type:", type(payload))
-                    if isinstance(payload, dict):
-                        print("DEBUG_INSPECT keys:", payload.keys())
-
-                    # Extract nested result
-                    result = payload.get("payload", {}).get("result", [])
-                    for key, val in result:
-                        if key != "messages":
-                            continue
-                        for msg in val:
-                            # msg is a HumanMessage, AIMessage or ToolMessage
-                            if getattr(msg, "type", None) == "tool" and getattr(msg, "name", None) == "notify_thought_tool":
-                                content = getattr(msg, "content", "{}")
-                                try:
-                                    tool_data = json.loads(content)
-                                    event_name = tool_data.get("event", "thought")
-                                    text = tool_data.get("content", "")
-                                    if text and text not in sent_thoughts:
-                                        yield sse(event_name, text)
-                                        sent_thoughts.add(text)
-                                except json.JSONDecodeError as e:
-                                    print("DEBUG parse error:", e)
                     continue
-
 
                 if event != "messages":
                     continue
 
-                if not (isinstance(data_tuple, tuple) and len(data_tuple) == 2):
-                    print(f"Warning: Unexpected data structure for 'messages' event: {data_tuple}")
-                    continue
-
-                msg, metadata = data_tuple
-                content = getattr(msg, "content", "")
+                msg, _ = data_tuple
+                content = getattr(msg, "content", "").strip()
                 msg_type = getattr(msg, "type", None)
 
-                # --- Priority 1: Thought tool call inside AIMessage ---
+                if not content:
+                    continue
+
+                # Handle thought tool outputs
                 if msg_type == 'ai' and hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    for tool_call in msg.tool_calls:
-                        if tool_call.get('name') == 'notify_thought_tool':
-                            try:
-                                raw_args = tool_call.get('args', '{}')
-                                args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                                event_name = args.get("stage", "thought")
-                                text = args.get("thought", "")
-                                if text and text not in sent_thoughts:
-                                    print(f"SSE (from AIMessage tool_call) → {event_name}: {text}")
-                                    yield sse(event_name, text)
-                                    sent_thoughts.add(text)
-                            except Exception as e:
-                                print(f"[ERROR] Failed to parse tool_call args: {e}")
-                        else:
-                            print(f"SSE → (ignored non-thought tool_call): {tool_call.get('name', 'unknown')}")
+                    for tc in msg.tool_calls or []:
+                        if tc.get('name') == 'notify_thought_tool':
+                            args = json.loads(tc.get('args', '{}') or "{}")
+                            ev = args.get("stage", "thought")
+                            txt = args.get("thought", "")
+                            if txt and txt not in sent_thoughts:
+                                yield sse(ev, txt)
+                                sent_thoughts.add(txt)
+                    continue
 
-                # --- Priority 2: Final report JSON in plain AIMessage ---
-                elif msg_type == 'ai' and not (hasattr(msg, 'tool_calls') and msg.tool_calls):
-                    if isinstance(content, str) and content.strip().startswith('{') and not report_started:
+                # Handle AI assistant messages
+                if msg_type == 'ai':
+                    # JSON report blocks
+                    if content.startswith('{') and not report_started:
                         try:
-                            report_data = json.loads(content)
-                            if "blocks" in report_data:
-                                print(f"SSE → Streaming {len(report_data['blocks'])} report blocks.")
+                            lvl = json.loads(content)
+                            if "blocks" in lvl:
                                 report_started = True
-                                for block in report_data.get("blocks", []):
-                                    yield sse("report_block", json.dumps(block))
-                            else:
-                                print(f"SSE → (ignored intermediate JSON): {content}")
+                                for blk in lvl["blocks"]:
+                                    yield sse("report_block", json.dumps(blk))
                         except json.JSONDecodeError:
-                            print(f"SSE → (ignored non-JSON or malformed content): {content[:200]}")
+                            pass
+                    else:
+                        yield sse("chat", content)
+                    continue
 
-                # --- Priority 3: Fallback ToolMessage (outside AI tool_call) ---
-                elif msg_type == "tool" and getattr(msg, 'name', '') == "notify_thought_tool":
-                    try:
-                        tool_data = json.loads(content or "{}")
-                        event_name = tool_data.get("event", "thought")
-                        text = tool_data.get("content", "")
-                        if text and text not in sent_thoughts:
-                            print(f"SSE (from ToolMessage) → {event_name}: {text}")
-                            yield sse(event_name, text)
-                            sent_thoughts.add(text)
-                        else:
-                            print(f"SSE → (ignored duplicate ToolMessage): {text}")
-                    except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                        print(f"SSE → (error parsing ToolMessage content): {e}")
+                # Additional thought via tools
+                if msg_type == 'tool' and getattr(msg, 'name', '') == "notify_thought_tool":
+                    td = json.loads(content or "{}")
+                    ev = td.get("event", "thought")
+                    txt = td.get("content", "")
+                    if txt and txt not in sent_thoughts:
+                        yield sse(ev, txt)
+                        sent_thoughts.add(txt)
+                    continue
 
-                # --- Priority 4: Debug unknown types ---
-                else:
-                    tool_name = getattr(msg, 'name', '')
-                    node = metadata.get("langgraph_node", "unknown")
-                    print(f"SSE → (ignored event) Type: {msg_type}, Node: {node}, Tool: {tool_name}")
+                # Ignore other messages
+                continue
 
-        except Exception as e:
-            print(f"[ERROR] Exception in event stream: {e}")
-            yield sse("error", f"An error occurred: {str(e)}")
+            # Send final event (logged, no UI effect)
+            yield sse("final", "Session complete")
 
-    response = Response(stream_with_context(event_stream()), mimetype="text/event-stream")
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Cache-Control'] = 'no-cache'
-    return response
+        except Exception as ex:
+            print("Stream error:", ex)
+            yield sse("error", f"Exception: {ex}")
 
-def sse(event, data):
-    """Format a string into a valid SSE message."""
+    resp = Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    resp.headers['X-Accel-Buffering'] = 'no'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+def sse(event: str, data: str) -> str:
+    """Format server-sent event."""
     lines = str(data).split('\n')
-    formatted_data = "\n".join(f"data: {line}" for line in lines)
-    return f"event: {event}\n{formatted_data}\n\n"
+    return f"event: {event}\n" + "\n".join(f"data: {l}" for l in lines) + "\n\n"

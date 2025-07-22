@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vue 3 Streaming Chat & Report</title>
-    <style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Vue 3 Streaming Chat & Report</title>
+  <style>
         /* General Styling */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -163,56 +163,55 @@
     </style>
 </head>
 <body>
-    {% raw %}
-    <div id="app">
-        <!-- Left Pane for Chat -->
-        <div class="pane left-pane">
-            <div class="section" style="flex-grow: 1;">
-                <h2><span>💬</span> Chat</h2>
-                <div class="chat-window">
-                    <div v-for="(msg, index) in chatMessages" :key="index" :class="['message', msg.role]">
-                        <div class="message-content">
-                            <strong>{{ msg.role === 'user' ? 'You' : 'Assistant' }}:</strong>
-                            <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
-                        </div>
-                        <!-- Integrated Thinking Dropdown -->
-                        <details v-if="msg.thoughts && msg.thoughts.length > 0" class="thinking-details">
-                            <summary>Show thinking</summary>
-                            <div class="thinking-content">
-                                <div v-for="(thought, tIndex) in msg.thoughts" :key="tIndex" class="thought">
-                                    {{ thought }}
-                                </div>
-                            </div>
-                        </details>
-                    </div>
-                </div>
-                <form @submit.prevent="submitMessage" id="input-form">
-                    <input v-model="userInput" id="user-input" autocomplete="off" placeholder="Type your request…" />
-                </form>
+  <div id="app">
+    <!-- Left Chat Pane -->
+    <div class="pane left-pane">
+      <div class="section" style="flex-grow: 1;">
+        <h2><span>💬</span> Chat</h2>
+        <div class="chat-window">
+          {% raw %}
+          <div v-for="(msg, i) in chatMessages" :key="i" :class="['message', msg.role]">
+            <div class="message-content">
+              <strong>
+                {{ msg.role === 'user'
+                  ? 'You'
+                  : (msg.role.includes('assistant') ? 'Assistant' : '') }}:
+              </strong>
+              <p style="margin: 0.5rem 0 0 0;">{{ msg.content }}</p>
             </div>
+            <details v-if="msg.thoughts?.length" class="thinking-details">
+              <summary>Show thinking</summary>
+              <div class="thinking-content">
+                <div v-for="(t,ti) in msg.thoughts" :key="ti" class="thought">{{ t }}</div>
+              </div>
+            </details>
+          </div>
+          {% endraw %}
         </div>
-
-        <!-- Right Pane for Report -->
-        <div class="pane right-pane">
-            <div class="section" style="flex-grow: 1;">
-                <h2><span>📄</span> Report</h2>
-                <div id="report-holder"></div>
-            </div>
-        </div>
+        <form @submit.prevent="submitMessage" id="input-form">
+          <input v-model="userInput" id="user-input" autocomplete="off" placeholder="Type your request…" />
+        </form>
+      </div>
     </div>
-    {% endraw %}
 
-    <!-- Vue 3 from CDN -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    
-    <!-- Editor.js and Plugins from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0"></script>
+    <!-- Right Report Pane -->
+    <div class="pane right-pane">
+      <div class="section" style="flex-grow: 1;">
+        <h2><span>📄</span> Report</h2>
+        <div id="report-holder"></div>
+      </div>
+    </div>
+  </div>
 
-     <script type="module">
-    const { createApp, ref, onMounted, nextTick } = Vue;
+  <!-- Vue 3 & Editor.js -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.29.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/paragraph@2.11.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0"></script>
+
+  <script type="module">
+    const { createApp, ref, nextTick, onMounted } = Vue;
 
     createApp({
       setup() {
@@ -222,15 +221,14 @@
         const userId = ref(null);
 
         onMounted(() => {
-          userId.value = Math.floor(Math.random() * 100000); // Simulate user ID
-
+          userId.value = Math.floor(Math.random() * 1e8);
           editor.value = new EditorJS({
             holder: 'report-holder',
             readOnly: true,
             tools: {
               paragraph: { class: Paragraph, inlineToolbar: true },
               header: { class: Header },
-              list: { class: List },
+              list: { class: List }
             },
             data: { blocks: [] }
           });
@@ -239,27 +237,21 @@
         const submitMessage = async () => {
           if (!userInput.value.trim()) return;
           chatMessages.value.push({ role: 'user', content: userInput.value, thoughts: [] });
-          
-          // Add a placeholder for the assistant's response
-          chatMessages.value.push({ role: 'assistant', content: 'Thinking...', thoughts: [] });
-
-          await editor.value.isReady;
+          chatMessages.value.push({ role: 'assistant', content: '', thoughts: [] }); // placeholder
           editor.value.clear();
-          
           streamChat(userInput.value);
           userInput.value = '';
         };
 
         const streamChat = async (text) => {
-          const response = await fetch('/chat', {
+          const res = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
             body: JSON.stringify({ input: text, user_id: userId.value })
           });
-          const reader = response.body.getReader();
+          const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
-          let firstAssistantMessage = false;
 
           while (true) {
             const { value, done } = await reader.read();
@@ -271,44 +263,50 @@
             for (const part of parts) {
               const lines = part.split('\n');
               let ev = '', data = '';
-              for (const l of lines) {
+              lines.forEach(l => {
                 if (l.startsWith('event:')) ev = l.slice(6).trim();
                 else if (l.startsWith('data:')) data += l.slice(5);
-              }
+              });
 
-              const lastMessage = chatMessages.value[chatMessages.value.length - 1];
-
-              if (ev === 'initial') {
-                if(lastMessage && lastMessage.role === 'assistant'){
-                    lastMessage.content = data;
-                }
-              } else if (ev === 'thought') {
-                 if(lastMessage && lastMessage.role === 'assistant'){
-                    lastMessage.thoughts.push(data);
-                }
-              } else if (ev === 'report_block') {
-                try {
-                  const block = JSON.parse(data);
-                  await editor.value.isReady;
-                  const idx = await editor.value.blocks.getBlocksCount();
-                  editor.value.blocks.insert(
-                    block.type,
-                    block.data,
-                    undefined,
-                    idx,
-                    false
-                  );
-                } catch (e) {
-                  console.error('Invalid block data', e);
-                }
-              } else if (ev === 'final') {
-                // Add a new, final message
-                chatMessages.value.push({ role: 'assistant final', content: data, thoughts: [] });
+              const last = chatMessages.value[chatMessages.value.length - 1];
+              switch (ev) {
+                case 'initial':
+                  console.warn('Initial event:', data);
+                  break;
+                case 'chat':
+                  chatMessages.value.push({ role: 'assistant', content: data, thoughts: [] });
+                  break;
+                case 'thought':
+                  if (last && last.role === 'assistant') {
+                    last.thoughts.push(data);
+                  }
+                  break;
+                case 'report_block':
+                  try {
+                    const block = JSON.parse(data);
+                    await editor.value.isReady;
+                    const idx = await editor.value.blocks.getBlocksCount();
+                    editor.value.blocks.insert(block.type, block.data, undefined, idx, false);
+                  } catch (e) {
+                    console.error('Report block error', e);
+                  }
+                  break;
+                case 'final':
+                  console.warn('Final event:', data);
+                  break;
+                case 'error':
+                  chatMessages.value.push({ role: 'assistant', content: `⚠️ Error: ${data}`, thoughts: [] });
+                  break;
+                case 'system':
+                  console.warn('System event:', data);
+                  break;
+                default:
+                  console.warn('Unknown event:', ev, data);
               }
 
               nextTick(() => {
                 const cw = document.querySelector('.chat-window');
-                if (cw) cw.scrollTop = cw.scrollHeight;
+                cw && (cw.scrollTop = cw.scrollHeight);
               });
             }
           }
