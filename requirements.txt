@@ -8,3 +8,4 @@ pypdf
 langgraph-supervisor
 flask
 flask-cors
+langgraph-checkpoint-redis
