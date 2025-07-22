@@ -26,3 +26,17 @@ Then, start the Redis server:
 ```bash
 redis-stack-server
 ```
+
+If it does not work, check if the old redis is still running...
+Try killing them..
+
+```
+ps aux | grep redis
+```
+
+Use kill -9 to kill the process
+
+If using brew, run the following:
+```
+brew services stop redis
+```
