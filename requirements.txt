@@ -9,3 +9,4 @@ langgraph-supervisor
 flask
 flask-cors
 langgraph-checkpoint-redis
+langchain-ollama
