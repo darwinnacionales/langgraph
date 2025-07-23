@@ -13,9 +13,12 @@ from langchain_core.tools import tool
 
 load_dotenv()
 
+# Sample Prompt:
+# check what the name of the smart farming and syntethic protein enterprise was
+
 llm = ChatOpenAI(
     api_key="ollama",
-    model="llama3-groq-tool-use:70b",
+    model="llama3.3:70b-instruct-q4_K_M",
     base_url="http://localhost:11434/v1",
 )
 
