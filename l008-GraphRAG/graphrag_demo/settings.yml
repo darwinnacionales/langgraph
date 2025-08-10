@@ -1,0 +1,22 @@
+models:
+  default_chat_model:
+    type: openai_chat
+    api_key: ${GRAPHRAG_API_KEY}
+    model: gpt-4o-mini
+    model_supports_json: true
+  default_embedding_model:
+    type: openai_embedding
+    api_key: ${GRAPHRAG_API_KEY}
+    model: text-embedding-3-small
+input:
+  type: file
+  base_dir: input
+  file_type: text
+  file_pattern: .*\.txt$$
+chunks:
+  size: 1200
+  overlap: 120
+  strategy: tokens
+output:
+  type: file
+  base_dir: output

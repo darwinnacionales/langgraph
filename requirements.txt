@@ -11,3 +11,7 @@ flask-cors
 langgraph-checkpoint-redis
 langchain-ollama
 duckduckgo-search
+graphrag
+pandas
+pyarrow
+tiktoken
